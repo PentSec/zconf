@@ -4,8 +4,8 @@
 # REQUIREMENTS:
 # - eggdrop 1.8
 # - ZNC admin account
-if {[catch {source scripts/zconf-dev-settings.tcl} err]} {
-	putlog "Error: Could not load 'scripts/zconf-dev-settings.tcl' file.";
+if {[catch {source scripts/zconf-settings.tcl} err]} {
+	putlog "Error: Could not load 'scripts/zconf-settings.tcl' file.";
 }
 putlog "zConf loaded";
 if {![file exists "userdir"]} {
@@ -26,10 +26,10 @@ namespace eval zconf {
 		# zConf Admin Commands
 		bind msg - adduser zconf::proc::admin::msg::adduser
 		bind msg - deluser zconf::proc::admin::msg::deluser
+		bind msg - regset zconf::proc::admin::msg::regset
 		bind pub - ${zconf::settings::admtrig}chk zconf::proc::check
 		bind pub - ${zconf::settings::pubtrig}userban zconf::proc::userban
 		bind pub - ${zconf::settings::pubtrig}banuser zconf::proc::userban
-		bind pub - ${zconf::settings::admtrig}regset zconf::proc::admin::regset
 		# Return from *controlpanel
 		bind msg - Error: zconf::proc::zncresponce:error
 		bind msg - User zconf::proc::zncresponce:good
@@ -211,28 +211,27 @@ namespace eval zconf {
 					putserv "PRIVMSG *controlpanel deluser $v1";
 					putserv "NOTICE $nick :User \003$v1\003 deleted"
 				}
-
-			}
-			proc regset {nick uhost hand chan text} {
-				if {[zconf::proc::isAdmin $nick] == "0"} { putserv "PRIVMSG $chan :Error - only admins can run that command."; return }
-				set v1 [lindex [split $text] 0]
-				if {![llength [split $v1]]} {
-					putserv "PRIVMSG $chan :Error - please specify option."
-					putlog "zConf \$ \[COMMAND LOG\] :admin: regset - no args"
-					return
-				}
-				if {$v1 == "public"} {
-					set regdb "userdir/settings/regset"
-					zconf::util::write_db $regdb "public"
-					putserv "PRIVMSG $chan :Registration set to Public"
-					putlog "zConf \$ \[COMMAND LOG\] :admin: regset - args: public"
-					return
-				}
-				if {$v1 == "off"} {
-					set regdb "userdir/settings/regset"
-					zconf::util::write_db $regdb "off"
-					putserv "PRIVMSG $chan :Registration set to Off. | until reenabled, zConf will not accept new registrations."
-					putserv "zConf \$ \[COMMAND LOG\] :admin: regset - args: "
+				proc regset {nick uhost hand chan text} {
+					if {[zconf::proc::isAdmin $nick] == "0"} { putserv "PRIVMSG $chan :Error - only admins can run that command."; return }
+					set v1 [lindex [split $text] 0]
+					if {![llength [split $v1]]} {
+						putserv "PRIVMSG $chan :Error - please specify option."
+						putlog "zConf \$ \[COMMAND LOG\] :admin: regset - no args"
+						return
+					}
+					if {$v1 == "public"} {
+						set regdb "userdir/settings/regset"
+						zconf::util::write_db $regdb "public"
+						putserv "PRIVMSG $chan :Registration set to Public"
+						putlog "zConf \$ \[COMMAND LOG\] :admin: regset - args: public"
+						return
+					}
+					if {$v1 == "off"} {
+						set regdb "userdir/settings/regset"
+						zconf::util::write_db $regdb "off"
+						putserv "PRIVMSG $chan :Registration set to Off. | until reenabled, zConf will not accept new registrations."
+						putserv "zConf \$ \[COMMAND LOG\] :admin: regset - args: "
+					}
 				}
 			}
 		}
@@ -251,9 +250,36 @@ namespace eval zconf {
 				putserv "NOTICE $nick :Help article for \036$v1\036"
 				putserv "NOTICE $nick :Current public commands are:"
 				putserv "NOTICE $nick :version request approve info zhelp status"
-				putserv "NOTICE $nick :to find out more, use /msg [getNick] zhelp \037command\037"
+				if {[zconf::proc::admin::isAdmin $nick] == "1"} {
+					putserv "NOTICE $nick :Administration Commands are:"
+					putserv "NOTICE $nick :adduser deluser regset"
+				}
+				putserv "NOTICE $nick :to find out more, use /msg [getNick] zhelp \002command\002"
+				return
 			}
-			if {$v1 == "adduser"} { putserv "NOTICE $nick :USAGE - \002/msg [getNick] zconf adduser \037username\037\002"}
+			if {$v1 == "version"} { putserv "NOTICE $nick :displays current version to the channel."; return }
+			if {$v1 == "request"} { putserv "NOTICE $nick :submit a znc account request"; return }
+			if {$v1 == "approve"} { putserv "NOTICE $nick :submit your approval code for a znc account"; return }
+			if {$v1 == "info"} { putserv "NOTICE $nick :see info on how to connect to the znc"; return }
+			if {$v1 == "status"} { putserv "NOTICE $chan :See znc server load status"; return }
+			if {$v1 == "zhelp"} { putserv "NOTICE $nick :view the basic help info"; return}
+			if {$v1 == "adduser"} {
+				if {[zconf::proc::admin::isAdmin $nick] == "0"} { return }
+				putserv "NOTICE $nick :USAGE - /msg [getNick] adduser \002username\002"
+				putserv "NOTICE $nick :FUNCTION - adds a user to the db | restricted to admins"
+				return
+			}
+			if {$v1 == "deluser"} {
+				if {[zconf::proc::admin::isAdmin $nick] == "0"} { return }
+				putserv "NOTICE $nick :USAGE - /msg [getNick] deluser \002username\002"
+				putserv "NOTICE $nick :FUNCTION - deletes a user from the db | restricted to admins"
+				return
+			}
+			if {$v1 == "regset"} {
+				if {[zconf::proc::admin::isAdmin $nick] == "0"} { return }
+				putserv "NOTICE $nick :USAGE /msg [getNick] regset \002\[public|off\]\002"
+				putserv "NOTICE $nick :FUNCTION - set zConf registration status | restricted to admins"
+			}
 		}
 		proc pub {nick uhost hand chan text} {
 			putserv "PRIVMSG $chan :For help, use /msg [getNick] zhelp"
